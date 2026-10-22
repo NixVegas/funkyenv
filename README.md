@@ -18,6 +18,7 @@ Add `overlays.funky` to your nixpkgs, then override a package's stdenv with a se
 ```nix
 pkgs.hello.override {
   # Make sure you replace "4" with a seed others can't guess
+  # try: nix run nixpkgs#ruby -- -rsecurerandom -e 'puts SecureRandom.random_number(1..0x7fffffffffffffff)'
   stdenv = pkgs.funkyenv.seed 4;
 }
 ```
