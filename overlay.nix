@@ -1,6 +1,4 @@
 final: prev: {
-  premenv = prev.callPackage ./premenv.nix { };
-  lib = prev.lib // {
-    gold = import ./lib.nix;
-  };
+  funkyenv = prev.callPackage ./funkyenv.nix { };
+  lldFunkyenv = prev.callPackage ./funkyenv.nix { linker = "lld"; };
 }
