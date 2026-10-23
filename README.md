@@ -56,6 +56,39 @@ actually shuffled. funkyenv links 32 small canary functions into each one and
 checks after the build that their order changed. Set `dontVerifyFunkyenv = true;`
 on a derivation to skip this, e.g. for packages that strip all symbols.
 
+## API
+
+`overlays.funky` adds two attributes to nixpkgs:
+
+| Attribute | Linker |
+| --- | --- |
+| `pkgs.funkyenv` | mold |
+| `pkgs.lldFunkyenv` | lld |
+
+### `seed`
+
+`pkgs.funkyenv.seed <seed>` and `pkgs.lldFunkyenv.seed <seed>` return a stdenv
+that shuffles functions based on the provided seed.
+Evaluation fails if the seed is not an integer in the linker's range
+(see the table above). The stdenv has two functions:
+
+- `mkDerivation <args>`: builds a funky package. This is what
+  `pkg.override { stdenv = pkgs.funkyenv.seed 4; }` uses.
+- `funkify <drv>`: makes an existing derivation funky without changing its
+  stdenv. Use this for packages that ignore the stdenv they are given but already link
+  with the same linker, like [Firefox](#firefox) and lld. Returns
+  `drv.overrideAttrs (...)`.
+
+### Attributes of funky packages
+
+- `functionOrder`: lists of functions in address order for the normal and
+  the funky package. See [Comparing function order](#comparing-function-order).
+- `functionOrderAgainst <drv>`: the same, comparing against `drv`.
+
+### Attributes funkyenv reads
+
+- `dontVerifyFunkyenv`: set to `true` to skip the check.
+
 ## Comparing function order
 
 Every package built with funkyenv has a `functionOrder` attribute. It builds the
@@ -78,6 +111,8 @@ The normal package is rebuilt from the package's original arguments, so
 overrides applied after the stdenv override are not included. Use
 `functionOrderAgainst` to compare against a package of your choice instead,
 e.g. `glibc.functionOrderAgainst pkgs.glibc` for the [glibc](#glibc) example.
+For packages made with `funkify`, `functionOrder` compares against the package
+that was passed in.
 
 ## PHP
 
@@ -106,6 +141,10 @@ services.phpfpm.phpPackage = php;
 services.wordpress.sites."localhost" = { ... };
 ```
 
+## OpenSSH
+
+This one is easy, just `openssh.override { stdenv = pkgs.funkyenv.seed 4; }`.
+
 ## glibc
 
 mold can't link glibc's dynamic loader, so use `lldFunkyenv`. glibc also puts
@@ -124,6 +163,43 @@ glibc =
 Programs only use it if they are built against it or started with its loader,
 for example `${glibc}/lib/ld-linux-x86-64.so.2 --library-path ${glibc}/lib ./program`.
 Replacing glibc for everything rebuilds all of nixpkgs.
+
+## Firefox
+
+Firefox builds its own clang stdenv and ignores the one it's given, but it
+already links with lld, so use `funkify` with `lldFunkyenv`. It also bundles
+nixpkgs' onnxruntime, which has to be shuffled separately or the check fails:
+
+```nix
+firefox =
+  let
+    # Make sure you replace "4" with seeds others can't guess
+    onnxruntime = pkgs.onnxruntime.override { stdenv = pkgs.funkyenv.seed 4; };
+    firefox-unwrapped = (pkgs.lldFunkyenv.seed 4).funkify (
+      pkgs.firefox-unwrapped.override { inherit onnxruntime; }
+    );
+  in
+  pkgs.wrapFirefox firefox-unwrapped { };
+```
+
+Firefox is then built from source with LTO and PGO, which took 1.5 to 2 hours on
+24 cores, again for every update. Shuffling undoes the code layout PGO picked,
+so expect some performance cost.
+
+`functionOrder` would compare against an unshuffled Firefox with the funky
+onnxruntime, which is another full build. Compare against nixpkgs' build
+instead:
+
+```nix
+firefox-unwrapped.functionOrderAgainst pkgs.firefox-unwrapped
+```
+
+`libxul.so` has many names for some addresses (identical functions are merged),
+which makes it look less shuffled in a diff of names than it is.
+
+## TODOs
+
+Kernel, Chromium
 
 ## AI use
 

@@ -39,12 +39,15 @@
               };
             in
             (callPackage (pkgs.path + "/pkgs/development/interpreters/php") { }).php85;
+
+          openssh = pkgs.openssh.override { stdenv = pkgs.funkyenv.seed shuffleSeed; };
         in
         {
           default = pkgs.php.override { stdenv = pkgs.funkyenv.seed shuffleSeed; };
         }
         // pkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
           wordpress = pkgs.testers.runNixOSTest (import ./tests/wordpress.nix { inherit php; });
+          ssh = pkgs.testers.runNixOSTest (import ./tests/ssh.nix { inherit openssh; });
         }
       );
 
