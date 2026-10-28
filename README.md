@@ -145,6 +145,37 @@ services.wordpress.sites."localhost" = { ... };
 
 This one is easy, just `openssh.override { stdenv = pkgs.funkyenv.seed 4; }`.
 
+## nginx and brotli
+
+nixpkgs' nginx brotli module links against nixpkgs' `brotli`, so build both with
+funkyenv. brotli 1.2.1 fixes CVE-2026-111497, an out-of-bounds write in the
+decoder; nixpkgs still has 1.2.0:
+
+```nix
+let
+  # Make sure you replace "4" with a seed others can't guess
+  stdenv = pkgs.funkyenv.seed 4;
+
+  brotli = (pkgs.brotli.override { inherit stdenv; }).overrideAttrs (prev: {
+    version = "1.2.1";
+    src = prev.src.override {
+      tag = "v1.2.1";
+      hash = "sha256-llY72cYffDv0ugsH0p89xIPEbElV4L8u7U/Fe8hT3gI=";
+    };
+  });
+in
+{
+  services.nginx.package = pkgs.nginx.override {
+    inherit stdenv;
+    modules = pkgs.nginx.modules ++ [ (pkgs.nginxModules.brotli.override { inherit brotli; }) ];
+  };
+}
+```
+
+Don't also set `services.nginx.recommendedBrotliSettings`, which adds nixpkgs'
+unfunky brotli module; configure `brotli on;` yourself instead. nginx's module
+only compresses, so nginx itself never runs the vulnerable decoder.
+
 ## glibc
 
 mold can't link glibc's dynamic loader, so use `lldFunkyenv`. glibc also puts
