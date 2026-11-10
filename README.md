@@ -13,6 +13,8 @@
 funkyenv uses `mold` to deterministically shuffle function order in binaries, in case they are exposed to the internet
 and you don't want people [guessing where your functions are](https://en.wikipedia.org/wiki/PHP2Shell).
 
+To see what it looks like in radare2, see [hello/example.md](hello/example.md)
+
 Add `overlays.funky` to your nixpkgs, then override a package's stdenv with a seed:
 
 ```nix
